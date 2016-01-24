@@ -7,6 +7,12 @@ module PBR
       'User-Agent'      => "Mozilla/5.0 (Linux; Android 4.3; Nexus 7 Build/JSS15Q) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2307.2 Safari/537.36",
     } # it rocks ^.^
   
+    EMPTY       = -1
+    INITIALIZED = 0
+    STARTED     = 1
+    COMPLETE    = 2 
+    ERROR       = 3   
+    
     def self.mock u, *o
       o[0] ||= {}
       
@@ -60,6 +66,7 @@ module PBR
     attr_reader :size, :transfered, :code, :status, :uri
     
     def initialize u = nil, *o, &b
+      @status = EMPTY
       m = self.class.mock u,*o
       
       @uri  = m[:uri]      
@@ -69,7 +76,7 @@ module PBR
       @on_finish_cb = b
       
       @transfered = 0
-      @status     = :initialized
+      @status     = INITIALIZED
       @code       = 0
     end
     
@@ -84,7 +91,7 @@ module PBR
     def start
       raise "DownloadNotInitializedError: download not initialized" unless status == :initialized
       
-      @status = :started
+      @status = STARTED
       
       File.open(@out, "w") do |f|
         HttpRequest.new.get(@uri, nil, HEAD) do |chunk|
@@ -94,11 +101,12 @@ module PBR
         end
       end
         
-      @status = :completed
+      @status = COMPLETE
+      
       @on_finish_cb.call(self) if @on_finish_cb
     rescue => e
       @code = -1
-      @status = :error
+      @status = ERROR
     end
     
     # Set a callback for progress changed
