@@ -1,5 +1,25 @@
 module PBR
   class Download
+    class RequestError < StandardError
+      attr_reader :code
+      def initialize(msg="Unknown Error", code=-1)
+        @code = code
+        super(msg)
+      end
+    end
+     
+    class WriteError < StandardError
+      def initialize(msg="Unknown Error")
+        super(msg)
+      end    
+    end
+    
+    class NotInitializedError < StandardError
+      def initialize(msg="Download#start called but Download#status == EMPTY")
+        super(msg)
+      end    
+    end    
+    
     HEAD = {
       'Accept-Language' => 'en-us,en;q=0.5',
       'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -11,7 +31,9 @@ module PBR
     INITIALIZED = 0
     STARTED     = 1
     COMPLETE    = 2 
-    ERROR       = 3   
+    ERROR       = 3 
+    
+    MAX_REDIRECTS = 20  
     
     def self.unique_filename uri, *o
       h = mock uri,*o
@@ -23,9 +45,9 @@ module PBR
         ext = t.pop
           
         f = t.join(".")
-        f += " (#{i})"
-        f += ".#{+ext}"
-        
+        f += "-#{i}"
+        f += ".#{ext}"
+
         i += 1
       end
       
@@ -42,37 +64,49 @@ module PBR
       h = headers_after_redirects(u)
     
       {
-        :size        => h['content-length'].to_i,
+        :size        => (h['content-length'] ||= 0).to_i,
         :uri         => (u = h['location'] || u),
         :destination => "#{o[:dest_dir] || "." }/#{o[:dest_filename] || get_suggested_filename(u, h)}"        
       }
     end
     
-    def self.uri_after_redirects(uri)
+    def self.uri_after_redirects(uri, n_rd = 0)
+      if n_rd > MAX_REDIRECTS
+        raise "RequestError: Returned code - #{310}" 
+      end
+    
       h = HttpRequest.new.head(uri, HEAD)
     
       case h.code
       when 200
         return uri
-      when 302
+      when 302 || 301
         uri = h.headers['location']
-        uri_after_redirects(uri)
+        uri_after_redirects(uri, n_rd+1)
       else
-        raise "RequestError: Returned code - #{h.code}"            
+        raise RequestError.new("Respone returned: #{h.code}", h.code)            
       end    
     end
     
-    def self.headers_after_redirects(uri)
+    def self.headers_after_redirects(uri, n_rd = 0)
+      if n_rd > MAX_REDIRECTS
+        code = 310
+        raise RequestError.new("#{code} Too many redirects. max <= #{MAX_REDIRECTS}", code)  
+      end
+      
       h = HttpRequest.new.head(uri, HEAD)
     
       case h.code
       when 200
         return h.headers
+      when 301
+        uri = h.headers['location']
+        headers_after_redirects(uri, n_rd+1)
       when 302
         uri = h.headers['location']
         headers_after_redirects(uri)
       else
-        raise "RequestError: Returned code - #{h.code}"         
+        raise RequestError.new("Respone returned: #{h.code}", h.code)       
       end    
     end
     
@@ -81,13 +115,16 @@ module PBR
         headers = headers_after_redirects(uri)
       end
       
-      if (cd = headers["content-disposition"]).index "attachment; filename"
+      cd = headers["content-disposition"]
+      
+      if cd and  cd.index "attachment; filename"
         return cd.split("=").last.strip[1..-2]
       end
       
       parser = HTTP::Parser.new()
       uri = parser.parse_url(uri)
-      File.basename(uri.path)
+
+      File.basename(uri.path ? (uri.path == "/" ? "index.html" : uri.path) : "index.html")
     end  
   
     attr_reader :size, :transfered, :code, :status, :uri
@@ -116,7 +153,7 @@ module PBR
     end
     
     def start
-      raise "DownloadNotInitializedError: download not initialized" unless status == INITIALIZED
+      raise NotInitializedError.new() unless status == INITIALIZED
       
       @status = STARTED
       
@@ -124,18 +161,24 @@ module PBR
         HttpRequest.new.get(@uri, nil, HEAD) do |chunk|
           f.write chunk
           @transfered += chunk.size
-          @on_progress_changed_cb.call(self) if @on_progress_changed_cb
+          begin
+            @on_progress_changed_cb.call(self) if @on_progress_changed_cb
+          rescue => e
+            puts "WARN: on_progress - #{e}"
+          end
         end
       end
         
       @status = COMPLETE
       
-      @on_finish_cb.call(self) if @on_finish_cb
+      begin
+        @on_finish_cb.call(self) if @on_finish_cb
+      rescue => e
+        puts "WARN: on_finish - #{e}"
+      end      
     rescue => e
-      @code = -1
       @status = ERROR
-      
-      raise e
+      raise WriteError.new(e.inspect)
     end
     
     # Set a callback for progress changed
