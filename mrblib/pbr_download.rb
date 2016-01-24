@@ -13,6 +13,25 @@ module PBR
     COMPLETE    = 2 
     ERROR       = 3   
     
+    def self.unique_filename uri, *o
+      h = mock uri,*o
+      f = h[:destination]
+      i = 0
+        
+      while File.exist? f
+        t = h[:destination].split(".")
+        ext = t.pop
+          
+        f = t.join(".")
+        f += " (#{i})"
+        f += ".#{+ext}"
+        
+        i += 1
+      end
+      
+      File.basename f 
+    end
+    
     def self.mock u, *o
       o[0] ||= {}
       
@@ -22,10 +41,10 @@ module PBR
     
       h = headers_after_redirects(u)
     
-      {
-        :destination => "#{o[:dest_dir] || "." }/#{o[:dest_filename] || get_suggested_filename(u)}",
+      {,
         :size        => h['content-length'].to_i,
-        :uri         => h['location'] || u
+        :uri         => (u = h['location'] || u),
+        :destination => "#{o[:dest_dir] || "." }/#{o[:dest_filename] || get_suggested_filename(u)}"        
       }
     end
     
