@@ -39,7 +39,7 @@ module PBR
         uri = h.headers['location']
         uri_after_redirects(uri)
       else
-        raise "RequestError"         
+        raise "RequestError: Returned code - #{h.code}"            
       end    
     end
     
@@ -53,7 +53,7 @@ module PBR
         uri = h.headers['location']
         headers_after_redirects(uri)
       else
-        raise "RequestError"         
+        raise "RequestError: Returned code - #{h.code}"         
       end    
     end
     
@@ -89,7 +89,7 @@ module PBR
     end
     
     def start
-      raise "DownloadNotInitializedError: download not initialized" unless status == :initialized
+      raise "DownloadNotInitializedError: download not initialized" unless status == INITIALIZED
       
       @status = STARTED
       
@@ -107,6 +107,8 @@ module PBR
     rescue => e
       @code = -1
       @status = ERROR
+      
+      raise e
     end
     
     # Set a callback for progress changed
