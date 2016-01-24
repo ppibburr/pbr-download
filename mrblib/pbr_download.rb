@@ -81,7 +81,7 @@ module PBR
         headers = headers_after_redirects(uri)
       end
       
-      if (cd = h["content-disposition"]).index "attachment; filename"
+      if (cd = headers["content-disposition"]).index "attachment; filename"
         return cd.split("=").last.strip[1..-2]
       end
       
