@@ -41,7 +41,7 @@ module PBR
     
       h = headers_after_redirects(u)
     
-      {,
+      {
         :size        => h['content-length'].to_i,
         :uri         => (u = h['location'] || u),
         :destination => "#{o[:dest_dir] || "." }/#{o[:dest_filename] || get_suggested_filename(u)}"        
