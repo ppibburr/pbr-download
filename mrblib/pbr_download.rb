@@ -12,10 +12,12 @@ module PBR
       
       raise "ArgumentError: expect Hash as param 2" unless o[0].is_a?(Hash)
     
+      o = o[0]    
+    
       h = headers_after_redirects(u)
     
       {
-        :destination => "#{o[:dest_dir] || "." }/#{o[:dest_filename] || get_suggested_filename(uri)}",
+        :destination => "#{o[:dest_dir] || "." }/#{o[:dest_filename] || get_suggested_filename(u)}",
         :size        => h['content-length'].to_i,
         :uri         => h['location'] || u
       }
@@ -57,7 +59,7 @@ module PBR
   
     attr_reader :size, :transfered, :code, :status, :uri
     
-    def initialize u, *o, &b
+    def initialize u = nil, *o, &b
       m = self.class.mock u,*o
       
       @uri  = m[:uri]      
