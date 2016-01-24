@@ -44,7 +44,7 @@ module PBR
       {
         :size        => h['content-length'].to_i,
         :uri         => (u = h['location'] || u),
-        :destination => "#{o[:dest_dir] || "." }/#{o[:dest_filename] || get_suggested_filename(u)}"        
+        :destination => "#{o[:dest_dir] || "." }/#{o[:dest_filename] || get_suggested_filename(u, h)}"        
       }
     end
     
@@ -76,7 +76,15 @@ module PBR
       end    
     end
     
-    def self.get_suggested_filename(uri)
+    def self.get_suggested_filename(uri, headers = nil)
+      if !headers
+        headers = headers_after_redirects(uri)
+      end
+      
+      if (cd = h["content-disposition"]).index "attachment; filename"
+        return cd.split("=").last.strip[1..-2]
+      end
+      
       parser = HTTP::Parser.new()
       uri = parser.parse_url(uri)
       File.basename(uri.path)
